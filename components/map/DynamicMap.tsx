@@ -1,6 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { Vehicle, Hospital } from '@/types/gis';
+
+interface DynamicMapProps {
+  vehicles: Vehicle[];
+  hospitals: Hospital[];
+}
 
 const EsriMapEngine = dynamic(() => import('./EsriMapEngine'), {
   ssr: false,
@@ -11,10 +17,10 @@ const EsriMapEngine = dynamic(() => import('./EsriMapEngine'), {
   )
 });
 
-export function DynamicMap() {
+export function DynamicMap(props: DynamicMapProps) {
   return (
     <div className="w-full h-full">
-      <EsriMapEngine />
+      <EsriMapEngine {...props} />
     </div>
   );
 }

@@ -10,4 +10,4 @@ export function configureEsri() {
 
 export const DEFAULT_MAP_CENTER: [number, number] = [-117.1611, 32.7157]; // San Diego region
 export const DEFAULT_MAP_ZOOM = 12;
-export const DEFAULT_BASEMAP = 'dark-gray-vector';
+export const DEFAULT_BASEMAP = 'arcgis/dark-gray';
