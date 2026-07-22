@@ -5,10 +5,20 @@ import * as turf from '@turf/turf';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { Vehicle, Hospital, GeofenceEvent } from '@/types/gis';
+import { useDispatch } from '@/context/DispatchContext';
 
 export function useGeofenceEngine(vehicles: Vehicle[], hospitals: Hospital[]) {
   const triggeredEvents = useRef<Set<string>>(new Set());
   const [activeAlerts, setActiveAlerts] = useState<GeofenceEvent[]>([]);
+  
+  // Safely grab addLog if inside DispatchProvider
+  let addLog: any = null;
+  try {
+    const dispatch = useDispatch();
+    addLog = dispatch.addLog;
+  } catch (e) {
+    // optional fallback
+  }
 
   useEffect(() => {
     if (vehicles.length === 0 || hospitals.length === 0) return;
@@ -42,13 +52,23 @@ export function useGeofenceEngine(vehicles: Vehicle[], hospitals: Hospital[]) {
 
         setActiveAlerts(prev => [event, ...prev]);
 
+        if (addLog) {
+          addLog(
+            'GEOFENCE BREACH',
+            `Unit ${vehicle.callSign} crossed ${hospital.name} geofence boundary (${hospital.geofenceRadiusMeters}m radius).`,
+            'ALERT',
+            vehicle.id,
+            hospital.id
+          );
+        }
+
         // Write to Firestore
         setDoc(doc(db, 'geofence_alerts', event.id), event).catch(err => {
           console.error('Failed to write geofence event:', err);
         });
       }
     });
-  }, [vehicles, hospitals]);
+  }, [vehicles, hospitals, addLog]);
 
   return { activeAlerts };
 }

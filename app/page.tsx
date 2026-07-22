@@ -2,22 +2,25 @@
 
 import { useState, useCallback } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { Navbar } from '@/components/common/Navbar';
+import { DispatchProvider, useDispatch } from '@/context/DispatchContext';
+import { HeaderControls } from '@/components/dashboard/HeaderControls';
 import { DynamicMap } from '@/components/map/DynamicMap';
 import { FleetSidebar } from '@/components/dashboard/FleetSidebar';
 import { BedManagerModal } from '@/components/dashboard/BedManagerModal';
+import { AuditLogHUD } from '@/components/dashboard/AuditLogHUD';
 import { useFleetTelemetry } from '@/hooks/useFleetTelemetry';
 import { useGeofenceEngine } from '@/hooks/useGeofenceEngine';
 import { useSimulator } from '@/hooks/useSimulator';
 import { CalculatedRoute } from '@/lib/esri/routing';
 import { Vehicle } from '@/types/gis';
-import { AlertCircle, ShieldAlert, Bell, Radio, BedDouble } from 'lucide-react';
+import { ShieldAlert, Bell, Radio, BedDouble } from 'lucide-react';
 
 function DashboardView() {
   const [demoMode, setDemoMode] = useState(true);
   const [routesMap, setRoutesMap] = useState<Record<string, CalculatedRoute>>({});
 
-  const { isRunning } = useSimulator(demoMode);
+  const { simSpeed, presentationRole } = useDispatch();
+  const { isRunning } = useSimulator(demoMode, simSpeed);
   const { vehicles, hospitals, loading, error } = useFleetTelemetry();
   const { activeAlerts } = useGeofenceEngine(vehicles, hospitals);
   
@@ -49,19 +52,20 @@ function DashboardView() {
 
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-slate-950">
-      {/* Navbar Header */}
-      <Navbar 
-        demoMode={demoMode} 
-        setDemoMode={setDemoMode} 
-        vehicleCount={vehicles.length} 
-        connectionStatus={error ? 'Error' : loading ? 'Connecting...' : 'Live'} 
+      
+      {/* Header & Scenario Controls */}
+      <HeaderControls 
+        demoMode={demoMode}
+        setDemoMode={setDemoMode}
+        hospitals={hospitals}
+        vehicles={vehicles}
       />
 
       {/* Main Command Workspace */}
       <div className="flex-1 flex relative overflow-hidden">
         
         {/* Dispatcher Command Sidebar */}
-        {userRole === 'DISPATCHER' && (
+        {(userRole === 'DISPATCHER' || presentationRole === 'LEAD_DISPATCHER' || presentationRole === 'FIELD_EMS') && (
           <FleetSidebar
             vehicles={vehicles}
             hospitals={hospitals}
@@ -81,7 +85,10 @@ function DashboardView() {
             onRouteCalculated={handleRouteCalculated}
           />
 
-          {/* Quick Floating Status Badges (Top Overlay) */}
+          {/* Floating Audit Feed HUD */}
+          <AuditLogHUD />
+
+          {/* Quick Floating Status Badges (Top-Right Overlay) */}
           <div className="absolute top-4 right-4 z-10 flex flex-col gap-2.5 max-w-xs pointer-events-none">
             
             {/* Hospital Divert Overview Pill */}
@@ -91,10 +98,10 @@ function DashboardView() {
                   <ShieldAlert className="w-5 h-5 text-red-400" />
                   <div>
                     <p className="text-xs font-bold">{divertedCount} Hospital(s) Diverting</p>
-                    <p className="text-[10px] text-red-300/80">Rerouting advised</p>
+                    <p className="text-[10px] text-red-300/80">Rerouting active</p>
                   </div>
                 </div>
-                {userRole === 'HOSPITAL_MANAGER' && (
+                {(userRole === 'HOSPITAL_MANAGER' || presentationRole === 'REGIONAL_DIRECTOR') && (
                   <button
                     onClick={() => setIsBedModalOpen(true)}
                     className="text-[10px] bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-1 rounded transition-colors uppercase"
@@ -107,40 +114,23 @@ function DashboardView() {
 
             {/* Live Alerts Stream */}
             {activeAlerts.length > 0 && (
-              <div className="bg-slate-950/95 backdrop-blur-md p-3.5 rounded-xl border border-slate-800 pointer-events-auto shadow-2xl space-y-2 max-h-60 overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <div className="bg-slate-950/95 backdrop-blur-md p-3 rounded-xl border border-slate-800 pointer-events-auto shadow-2xl space-y-2 max-h-52 overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
                   <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
                     <Bell className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
-                    Geofence Alerts ({activeAlerts.length})
+                    Live Geofences ({activeAlerts.length})
                   </h3>
                 </div>
                 {activeAlerts.map(alert => (
                   <div key={alert.id} className="bg-slate-900/90 border border-slate-800 rounded-lg p-2 text-xs text-slate-300">
-                    <span className="text-amber-400 font-bold">{alert.type}:</span> Unit <span className="text-slate-100 font-semibold">{alert.vehicleId}</span> near <span className="text-slate-100 font-semibold">{alert.hospitalId}</span>
-                    <div className="text-[10px] text-slate-500 mt-1">{new Date(alert.timestamp).toLocaleTimeString()}</div>
+                    <span className="text-amber-400 font-bold">{alert.type}:</span> Unit <span className="text-slate-100 font-semibold">{alert.vehicleId}</span>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{new Date(alert.timestamp).toLocaleTimeString()}</div>
                   </div>
                 ))}
               </div>
             )}
 
           </div>
-
-          {/* Bottom Floating Info Pill for Non-Dispatcher View */}
-          {userRole !== 'DISPATCHER' && (
-            <div className="absolute bottom-6 left-6 z-10 bg-slate-950/90 backdrop-blur-md px-4 py-3 rounded-xl border border-slate-800 text-xs text-slate-300 shadow-2xl flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-                <span>Active Mode: <strong className="text-slate-100">{userRole}</strong></span>
-              </div>
-              <button
-                onClick={() => setIsBedModalOpen(true)}
-                className="flex items-center gap-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-3 py-1 rounded-lg hover:bg-cyan-500/30 transition-colors font-medium"
-              >
-                <BedDouble className="w-3.5 h-3.5" />
-                Manage Beds
-              </button>
-            </div>
-          )}
 
         </div>
 
@@ -155,7 +145,9 @@ function DashboardView() {
 export default function Home() {
   return (
     <AuthProvider>
-      <DashboardView />
+      <DispatchProvider>
+        <DashboardView />
+      </DispatchProvider>
     </AuthProvider>
   );
 }

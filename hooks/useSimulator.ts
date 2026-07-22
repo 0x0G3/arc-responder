@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase/config';
 import { calculateNextTick, SEED_HOSPITALS, SEED_VEHICLES } from '@/lib/simulation/simulatorLogic';
 import { Vehicle, Hospital } from '@/types/gis';
 
-export function useSimulator(enabled: boolean) {
+export function useSimulator(enabled: boolean, simSpeed: number = 1) {
   const [isRunning, setIsRunning] = useState(false);
   const vehiclesRef = useRef<Vehicle[]>([...SEED_VEHICLES]);
   const hospitalsRef = useRef<Hospital[]>([...SEED_HOSPITALS]);
@@ -53,6 +53,8 @@ export function useSimulator(enabled: boolean) {
         }
         await batch.commit();
 
+        const tickDelay = Math.max(250, Math.round(1500 / (simSpeed || 1)));
+
         interval = setInterval(async () => {
           const currentHospitals = hospitalsRef.current.length > 0 ? hospitalsRef.current : SEED_HOSPITALS;
           const nextVehicles = calculateNextTick(vehiclesRef.current, currentHospitals);
@@ -63,7 +65,7 @@ export function useSimulator(enabled: boolean) {
             updateBatch.set(doc(db, 'vehicles', vehicle.id), vehicle, { merge: true });
           }
           await updateBatch.commit();
-        }, 1500);
+        }, tickDelay);
       } catch (err) {
         console.error("Simulation error:", err);
       }
@@ -75,7 +77,7 @@ export function useSimulator(enabled: boolean) {
       setIsRunning(false);
       if (interval) clearInterval(interval);
     };
-  }, [enabled]);
+  }, [enabled, simSpeed]);
 
   return { isRunning };
 }
